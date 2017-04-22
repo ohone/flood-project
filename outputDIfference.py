@@ -4,17 +4,28 @@ import math
 import decimal
 import glob
 import csv
+from os import listdir
 import numpy as np
 from shapely.geometry import Point
 
-file_list0 = glob.glob('./csvdir1/*.csv')
-file_list1 = glob.glob('./csvdir2/*.csv')
+def byNumber_key(filestring):
+    number = filestring[-5]
+    try:
+        pre_number = int(filestring[-6])
+        return int(str(pre_number) + number)
+    except ValueError:
+        return int(number)
+
+
+file_list0 = sorted((glob.glob('./csvdir1/*.csv')), key=byNumber_key)
+file_list1 = sorted((glob.glob('./csvdir2/*.csv')), key=byNumber_key)
 
 
 def sameCoords(rowA, rowB):
     if rowA is None or rowB is None:
         False
     elif rowA["XCen"] == rowB["XCen"] and rowA["YCen"] == rowB["YCen"]:
+        print float(rowA["YCen"]) - float(rowB["YCen"])
         True
     else:
         False
@@ -29,7 +40,7 @@ def existsGeologyDifference(file_list0, file_list1):
         for rowI, rowJ in zip(readerI, readerJ):
             # if sync is broken (due to building removals/addition)
             if sameCoords(rowI, rowJ) is False:
-                return true
+                return True
         return False
 
 
@@ -98,6 +109,27 @@ def writeasciigrid(filename,  values, dimensionsDict, gridsize, nullvalue=-9999)
             f.write('\n')
     return True
 
+
+def importsCSVs2(file_list0, file_list1):
+    print "Importing Data..."
+    pointsList = []
+    velocitiesList = []
+    depthValuesList = []
+    for i, j in zip(file_list0, file_list1):
+        with open(i) as iFile, open(j) as jFile:
+            readerI = csv.DictReader(iFile)
+            readerJ = csv.DictReader(jFile)
+            bufferedRowJ = None
+            bufferedRowI = None
+            points = []
+            velocities = []
+            depthValues = []
+            for rowI, rowJ in zip(readerI, readerJ):
+                addToData(rowI, rowJ, points, velocities, depthValues)
+            pointsList.append(points)
+            velocitiesList.append(velocities)
+            depthValuesList.append(depthValues)
+    return pointsList, velocitiesList, depthValuesList
 
 def importsCSVs(file_list0, file_list1):
     print "Importing Data..."
@@ -196,11 +228,6 @@ def produceCSV(pointsList, velocitiesList, depthValuesList):
         count = count + 1
 
 
-pointsList, velocitiesList, depthValuesList = importsCSVs(
-    file_list0, file_list1)
-dimensionsDictionary = getDimensions(pointsList)
-
-
 def modVelocitiesList(velocities):
     absVelList = []
     for x in velocities:
@@ -211,12 +238,11 @@ def modVelocitiesList(velocities):
     return absVelList
 
 
-if (existsGeologyDifference(file_list0, file_list1) is True):  # false for testing purposes
-    pointsList, velocitiesList, depthValuesList = importsCSVs(file_list0, file_list1)
-    produceCSV(pointsList, velocitiesList, depthValuesList)
-    for i in range(len(pointsList)):
-        data = creategrid(pointsList[i], modVelocitiesList(velocitiesList[i]), dimensionsDictionary)
-        writeasciigrid("ASCIIout/outfile{}".format(i) + '.asc', data, dimensionsDictionary, 2, -9999)
-    print "Output generated."
-else:
-    print "No difference in geology, so no output difference expected or produced."
+#if (existsGeologyDifference(file_list0, file_list1) is True):
+pointsList, velocitiesList, depthValuesList = importsCSVs2(file_list0, file_list1)
+dimensionsDictionary = getDimensions(pointsList)
+produceCSV(pointsList, velocitiesList, depthValuesList)
+for i in range(len(velocitiesList)):
+    data = creategrid(pointsList[i], modVelocitiesList(velocitiesList[i]), dimensionsDictionary)
+    writeasciigrid("./ASCIIout/outfile{}".format(i) + '.asc', data, dimensionsDictionary, 2, -9999)
+print "Output generated."
